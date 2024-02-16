@@ -43,7 +43,6 @@ linters-settings:
     sections:
       - standard
       - default
-      - prefix(simkube)
       - blank
       - dot
 

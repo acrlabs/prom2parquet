@@ -2,6 +2,7 @@
 import os
 
 import fireconfig as fire
+from fireconfig.types import Capability
 from constructs import Construct
 
 DAG_FILENAME = "dag.mermaid"
@@ -23,7 +24,7 @@ class Prom2Parquet(fire.AppPackage):
             args=[
                 "/prom2parquet",
             ],
-        ).with_ports(SERVER_PORT)
+        ).with_ports(SERVER_PORT).with_security_context(Capability.DEBUG)
 
         self._depl = (fire.DeploymentBuilder(app_label=self.id)
             .with_containers(container)

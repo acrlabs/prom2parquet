@@ -3,6 +3,7 @@ module github.com/acrlabs/prom2parquet
 go 1.22.0
 
 require (
+	github.com/jonboulle/clockwork v0.4.0
 	github.com/prometheus/common v0.47.0
 	github.com/prometheus/prometheus v0.49.1
 	github.com/xitongsys/parquet-go v1.6.2
@@ -47,6 +48,8 @@ require (
 	github.com/prometheus/client_model v0.5.0 // indirect
 	github.com/prometheus/common/sigv4 v0.1.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
+	github.com/samber/lo v1.39.0 // indirect
+	github.com/sirupsen/logrus v1.9.3 // indirect
 	go.opentelemetry.io/collector/featuregate v1.0.0 // indirect
 	go.opentelemetry.io/collector/pdata v1.0.0 // indirect
 	go.opentelemetry.io/collector/semconv v0.90.1 // indirect
