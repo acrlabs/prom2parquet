@@ -2,8 +2,8 @@
 import os
 
 import fireconfig as fire
-from fireconfig.types import Capability
 from constructs import Construct
+from fireconfig.types import Capability
 
 DAG_FILENAME = "dag.mermaid"
 DIFF_FILENAME = "k8s.df"
@@ -18,13 +18,18 @@ class Prom2Parquet(fire.AppPackage):
         except FileNotFoundError:
             image = 'PLACEHOLDER'
 
+        env = (fire.EnvBuilder({"AWS_DEFAULT_REGION": "us-east-1"})
+            .with_secret("AWS_ACCESS_KEY_ID", "simkube", "aws_access_key_id")
+            .with_secret("AWS_SECRET_ACCESS_KEY", "simkube", "aws_secret_access_key")
+        )
+
         container = fire.ContainerBuilder(
             name=self.id,
             image=image,
             args=[
                 "/prom2parquet",
             ],
-        ).with_ports(SERVER_PORT).with_security_context(Capability.DEBUG)
+        ).with_env(env).with_ports(SERVER_PORT).with_security_context(Capability.DEBUG)
 
         self._depl = (fire.DeploymentBuilder(app_label=self.id)
             .with_containers(container)

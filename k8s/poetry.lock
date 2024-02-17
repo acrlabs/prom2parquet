@@ -95,7 +95,7 @@ optimize = ["orjson"]
 
 [[package]]
 name = "fireconfig"
-version = "0.5.0"
+version = "0.5.1"
 description = "Configuration language for Kubernetes manifests"
 optional = false
 python-versions = "^3.11"
@@ -111,8 +111,8 @@ simplejson = "^3.19.2"
 [package.source]
 type = "git"
 url = "https://github.com/acrlabs/fireconfig"
-reference = "v0.5.0"
-resolved_reference = "a840fb69cba51977b1ab775809e291a30db1d21c"
+reference = "v0.5.1"
+resolved_reference = "58e0d1782d8dfdba16797a65b74dfd7eb74a502f"
 
 [[package]]
 name = "importlib-resources"
@@ -441,4 +441,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "c5dba3cea0971ecc5593fb9583eb20516dc7957ac96efd6f750f1121651bcfc4"
+content-hash = "a88a9edb5645dde01d06391fe24a0482f7b899cfcbc7dc32fce45b87ac53a780"
