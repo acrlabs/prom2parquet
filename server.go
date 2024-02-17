@@ -49,5 +49,4 @@ func main() {
 	if err := http.ListenAndServe(":1234", nil); err != nil {
 		log.Errorf("http server failed: %v", err)
 	}
-
 }

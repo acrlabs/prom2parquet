@@ -3,11 +3,9 @@ package parquet
 import (
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/jonboulle/clockwork"
-	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/prompb"
 	log "github.com/sirupsen/logrus"
 	"github.com/xitongsys/parquet-go-source/local"
@@ -24,9 +22,14 @@ type Prom2ParquetWriter struct {
 }
 
 type DataPoint struct {
-	Labels    string  `parquet:"name=labels,type=BYTE_ARRAY,convertedtype=UTF8,encoding=PLAIN"`
-	Value     float64 `parquet:"name=value,type=DOUBLE"`
 	Timestamp int64   `parquet:"name=timestamp,type=INT64,convertedtype=TIMESTAMP"`
+	Value     float64 `parquet:"name=value,type=DOUBLE"`
+
+	Pod       *string `parquet:"name=pod,type=BYTE_ARRAY,convertedtype=UTF8,encoding=PLAIN"`
+	Container *string `parquet:"name=container,type=BYTE_ARRAY,convertedtype=UTF8,encoding=PLAIN"`
+	Namespace *string `parquet:"name=namespace,type=BYTE_ARRAY,convertedtype=UTF8,encoding=PLAIN"`
+	Node      *string `parquet:"name=node,type=BYTE_ARRAY,convertedtype=UTF8,encoding=PLAIN"`
+	Labels    string  `parquet:"name=labels,type=BYTE_ARRAY,convertedtype=UTF8,encoding=PLAIN"`
 }
 
 func NewProm2ParquetWriter(rootPath, metric string) *Prom2ParquetWriter {
@@ -34,33 +37,33 @@ func NewProm2ParquetWriter(rootPath, metric string) *Prom2ParquetWriter {
 }
 
 func (self *Prom2ParquetWriter) Listen(stream <-chan prompb.TimeSeries) {
-	for ts := range stream {
-		if time.Now().After(self.nextFlushTime) {
-			log.Infof("Current time is %v, which is after the next flush time of %v", time.Now(), self.nextFlushTime)
-			if err := self.flush(); err != nil {
-				log.Errorf("Could not flush data: %v", err)
-				break
-			}
-		}
+	self.flush()
+	defer self.closeFile()
 
-		labels := []string{}
-		for _, l := range ts.Labels {
-			labels = append(labels, string(model.LabelValue(l.Value)))
-		}
-		label_str := strings.Join(labels, ",")
-		for _, s := range ts.Samples {
-			dp := DataPoint{
-				Labels:    label_str,
-				Value:     s.Value,
-				Timestamp: s.Timestamp,
+	flushTicker := time.NewTicker(time.Minute)
+
+	for {
+		select {
+		case ts := <-stream:
+			dp := createDatapointForLabels(ts.Labels)
+			for _, s := range ts.Samples {
+				dp.Value = s.Value
+				dp.Timestamp = s.Timestamp
+
+				if err := self.pw.Write(dp); err != nil {
+					log.Errorf("Could not write datapoint: %v", err)
+				}
 			}
-			if err := self.pw.Write(dp); err != nil {
-				log.Errorf("Could not write datapoint: %v", err)
+		case <-flushTicker.C:
+			if time.Now().After(self.nextFlushTime) {
+				log.Infof("Flush triggered: %v >= %v", time.Now(), self.nextFlushTime)
+				if err := self.flush(); err != nil {
+					log.Errorf("Could not flush data: %v", err)
+					return
+				}
 			}
 		}
 	}
-
-	self.closeFile()
 }
 
 func (self *Prom2ParquetWriter) closeFile() {
