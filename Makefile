@@ -6,7 +6,7 @@ include build/base.mk
 include build/k8s.mk
 
 $(ARTIFACTS)::
-	CGO_ENABLED=0 go build -trimpath -o $(BUILD_DIR)/$@
+	CGO_ENABLED=0 go build -trimpath -o $(BUILD_DIR)/$@ ./cmd/.
 
 lint:
 	golangci-lint run

@@ -10,9 +10,10 @@ require (
 	github.com/prometheus/prometheus v0.49.1
 	github.com/samber/lo v1.39.0
 	github.com/sirupsen/logrus v1.9.3
+	github.com/spf13/cobra v1.8.0
 	github.com/xitongsys/parquet-go v1.6.2
 	github.com/xitongsys/parquet-go-source v0.0.0-20240122235623-d6294584ab18
-	golang.org/x/exp v0.0.0-20231206192017-f3f8817b8deb
+	golang.org/x/sync v0.5.0
 )
 
 require (
@@ -55,6 +56,7 @@ require (
 	github.com/google/uuid v1.4.0 // indirect
 	github.com/grafana/regexp v0.0.0-20221122212121-6b5c0a4cb7fd // indirect
 	github.com/hashicorp/go-version v1.6.0 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/jpillora/backoff v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
@@ -69,6 +71,7 @@ require (
 	github.com/prometheus/client_model v0.5.0 // indirect
 	github.com/prometheus/common/sigv4 v0.1.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
+	github.com/spf13/pflag v1.0.5 // indirect
 	go.opentelemetry.io/collector/featuregate v1.0.0 // indirect
 	go.opentelemetry.io/collector/pdata v1.0.0 // indirect
 	go.opentelemetry.io/collector/semconv v0.90.1 // indirect
@@ -79,6 +82,7 @@ require (
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/crypto v0.18.0 // indirect
+	golang.org/x/exp v0.0.0-20231206192017-f3f8817b8deb // indirect
 	golang.org/x/net v0.20.0 // indirect
 	golang.org/x/oauth2 v0.16.0 // indirect
 	golang.org/x/sys v0.16.0 // indirect

@@ -25,11 +25,11 @@ type DataPoint struct {
 	Timestamp int64   `parquet:"name=timestamp,type=INT64,convertedtype=TIMESTAMP"`
 	Value     float64 `parquet:"name=value,type=DOUBLE"`
 
-	Pod       *string `parquet:"name=pod,type=BYTE_ARRAY,convertedtype=UTF8,encoding=PLAIN"`
-	Container *string `parquet:"name=container,type=BYTE_ARRAY,convertedtype=UTF8,encoding=PLAIN"`
-	Namespace *string `parquet:"name=namespace,type=BYTE_ARRAY,convertedtype=UTF8,encoding=PLAIN"`
-	Node      *string `parquet:"name=node,type=BYTE_ARRAY,convertedtype=UTF8,encoding=PLAIN"`
-	Labels    string  `parquet:"name=labels,type=BYTE_ARRAY,convertedtype=UTF8,encoding=PLAIN"`
+	Pod       string `parquet:"name=pod,type=BYTE_ARRAY,convertedtype=UTF8,encoding=PLAIN"`
+	Container string `parquet:"name=container,type=BYTE_ARRAY,convertedtype=UTF8,encoding=PLAIN"`
+	Namespace string `parquet:"name=namespace,type=BYTE_ARRAY,convertedtype=UTF8,encoding=PLAIN"`
+	Node      string `parquet:"name=node,type=BYTE_ARRAY,convertedtype=UTF8,encoding=PLAIN"`
+	Labels    string `parquet:"name=labels,type=BYTE_ARRAY,convertedtype=UTF8,encoding=PLAIN"`
 }
 
 func NewProm2ParquetWriter(rootPath, metric string) *Prom2ParquetWriter {
@@ -37,14 +37,22 @@ func NewProm2ParquetWriter(rootPath, metric string) *Prom2ParquetWriter {
 }
 
 func (self *Prom2ParquetWriter) Listen(stream <-chan prompb.TimeSeries) {
-	self.flush()
+	if err := self.flush(); err != nil {
+		log.Errorf("could not flush writer: %v", err)
+		return
+	}
 	defer self.closeFile()
 
 	flushTicker := time.NewTicker(time.Minute)
 
 	for {
 		select {
-		case ts := <-stream:
+		case ts, ok := <-stream:
+			if !ok {
+				self.closeFile()
+				return
+			}
+
 			dp := createDatapointForLabels(ts.Labels)
 			for _, s := range ts.Samples {
 				dp.Value = s.Value
@@ -71,6 +79,7 @@ func (self *Prom2ParquetWriter) closeFile() {
 		if err := self.pw.WriteStop(); err != nil {
 			log.Errorf("Can't close parquet writer: %v", err)
 		}
+		self.pw = nil
 	}
 }
 
@@ -81,20 +90,20 @@ func (self *Prom2ParquetWriter) flush() error {
 	currentDir := fmt.Sprintf("%s/%s", self.RootPath, now.Format("2006/01/02/15"))
 	currentFile := fmt.Sprintf("%s/%s.parquet", currentDir, self.Metric)
 
-	log.Infof("Writing metrics for %s to %s", self.Metric, currentFile)
+	log.Infof("writing metrics for %s to %s", self.Metric, currentFile)
 
 	if err := os.MkdirAll(currentDir, 0750); err != nil {
-		return fmt.Errorf("Can't create directory: %w", err)
+		return fmt.Errorf("can't create directory: %w", err)
 	}
 
 	fw, err := local.NewLocalFileWriter(currentFile)
 	if err != nil {
-		return fmt.Errorf("Can't create directory: %w", err)
+		return fmt.Errorf("can't create filewriter: %w", err)
 	}
 
 	pw, err := writer.NewParquetWriter(fw, new(DataPoint), 4)
 	if err != nil {
-		return fmt.Errorf("Can't create directory: %w", err)
+		return fmt.Errorf("can't create parquet writer: %w", err)
 	}
 	pw.CompressionType = parquet.CompressionCodec_SNAPPY
 
