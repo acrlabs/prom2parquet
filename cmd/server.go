@@ -22,15 +22,17 @@ const shutdownTime = 30 * time.Second
 
 type promserver struct {
 	httpserv *http.Server
+	opts     *options
 	channels map[string]chan prompb.TimeSeries
 }
 
-func newServer(addr int) *promserver {
-	fulladdr := fmt.Sprintf(":%d", addr)
+func newServer(opts *options) *promserver {
+	fulladdr := fmt.Sprintf(":%d", opts.port)
 	mux := http.NewServeMux()
 
 	s := &promserver{
 		httpserv: &http.Server{Addr: fulladdr, Handler: mux, ReadHeaderTimeout: 10 * time.Second},
+		opts:     opts,
 		channels: map[string]chan prompb.TimeSeries{},
 	}
 	mux.HandleFunc("/receive", s.metricsReceive)
@@ -119,7 +121,12 @@ func (self *promserver) metricsReceive(w http.ResponseWriter, req *http.Request)
 		log.Infof("received timeseries data for %s", metric_name)
 		if _, ok := self.channels[metric_name]; !ok {
 			log.Infof("new metric name seen, creating writer %s", metric_name)
-			writer := parquet.NewProm2ParquetWriter("/data", metric_name)
+			writer := parquet.NewProm2ParquetWriter(
+				fmt.Sprintf("/data/%s", self.opts.prefix),
+				metric_name,
+				self.opts.cleanLocalStorage,
+				self.opts.remote,
+			)
 			ch := make(chan prompb.TimeSeries)
 			self.channels[metric_name] = ch
 

@@ -11,28 +11,41 @@ import (
 	"github.com/acrlabs/prom2parquet/pkg/util"
 )
 
-const (
-	progname = "prom2parquet"
-
-	serverPortFlag = "server-port"
-	remoteFlag     = "remote"
-	verbosityFlag  = "verbosity"
-)
+const progname = "prom2parquet"
 
 func rootCmd() *cobra.Command {
-	opts := Options{
+	opts := options{
 		verbosity: log.InfoLevel,
 	}
 
 	root := &cobra.Command{
 		Use:   progname,
-		Short: "Prometheus remote write endpoint for writing Parquet files",
+		Short: "Prometheus remote write endpoint for saving Prometheus metrics to Parquet files",
 		Run: func(_ *cobra.Command, _ []string) {
-			start(opts)
+			start(&opts)
 		},
 	}
 
-	root.PersistentFlags().IntP(serverPortFlag, "p", 1234, "port for the remote write endpoint to listen on")
+	root.PersistentFlags().StringVar(
+		&opts.prefix,
+		prefixFlag,
+		"",
+		"directory prefix for saving parquet files",
+	)
+	root.PersistentFlags().IntVarP(
+		&opts.port,
+		serverPortFlag,
+		"p",
+		1234,
+		"port for the remote write endpoint to listen on",
+	)
+
+	root.PersistentFlags().BoolVar(
+		&opts.cleanLocalStorage,
+		cleanLocalStorageFlag,
+		false,
+		"delete pod-local parquet files upon flush",
+	)
 	root.PersistentFlags().Var(
 		enumflag.New(&opts.remote, remoteFlag, supportedRemoteIDs, enumflag.EnumCaseInsensitive),
 		remoteFlag,
@@ -41,18 +54,20 @@ func rootCmd() *cobra.Command {
 			validArgs(supportedRemoteIDs),
 		),
 	)
+
 	root.PersistentFlags().VarP(
 		enumflag.New(&opts.verbosity, verbosityFlag, logLevelIDs, enumflag.EnumCaseInsensitive),
-		verbosityFlag, "v",
+		verbosityFlag,
+		"v",
 		fmt.Sprintf("log level (valid options: %s)", validArgs(logLevelIDs)),
 	)
 	return root
 }
 
-func start(opts Options) {
+func start(opts *options) {
 	util.SetupLogging(opts.verbosity)
 
-	server := newServer(opts.port)
+	server := newServer(opts)
 	server.run()
 }
 

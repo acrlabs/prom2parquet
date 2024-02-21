@@ -5,20 +5,22 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
-	"github.com/thediveo/enumflag/v2"
+
+	"github.com/acrlabs/prom2parquet/pkg/remotes"
 )
 
-type RemoteEndpoint enumflag.Flag
-
 const (
-	None RemoteEndpoint = iota
-	S3
+	prefixFlag            = "prefix"
+	serverPortFlag        = "server-port"
+	cleanLocalStorageFlag = "clean-local-storage"
+	remoteFlag            = "remote"
+	verbosityFlag         = "verbosity"
 )
 
 //nolint:gochecknoglobals
-var supportedRemoteIDs = map[RemoteEndpoint][]string{
-	None: {"none"},
-	S3:   {"s3", "aws"},
+var supportedRemoteIDs = map[remotes.Endpoint][]string{
+	remotes.None: {"none"},
+	remotes.S3:   {"s3", "aws"},
 }
 
 //nolint:gochecknoglobals
@@ -32,9 +34,13 @@ var logLevelIDs = map[log.Level][]string{
 	log.PanicLevel: {"panic"},
 }
 
-type Options struct {
-	port      int
-	remote    RemoteEndpoint
+type options struct {
+	prefix string
+	port   int
+
+	cleanLocalStorage bool
+	remote            remotes.Endpoint
+
 	verbosity log.Level
 }
 

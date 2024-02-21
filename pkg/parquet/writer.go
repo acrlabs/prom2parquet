@@ -11,14 +11,19 @@ import (
 	"github.com/xitongsys/parquet-go-source/local"
 	"github.com/xitongsys/parquet-go/parquet"
 	"github.com/xitongsys/parquet-go/writer"
+
+	"github.com/acrlabs/prom2parquet/pkg/remotes"
 )
 
 type Prom2ParquetWriter struct {
-	RootPath      string
-	Metric        string
-	nextFlushTime time.Time
-	pw            *writer.ParquetWriter
-	clock         clockwork.Clock
+	RootPath string
+	Metric   string
+
+	currentFile       string
+	cleanLocalStorage bool
+	nextFlushTime     time.Time
+	pw                *writer.ParquetWriter
+	clock             clockwork.Clock
 }
 
 type DataPoint struct {
@@ -32,8 +37,17 @@ type DataPoint struct {
 	Labels    string `parquet:"name=labels,type=BYTE_ARRAY,convertedtype=UTF8,encoding=PLAIN"`
 }
 
-func NewProm2ParquetWriter(rootPath, metric string) *Prom2ParquetWriter {
-	return &Prom2ParquetWriter{RootPath: rootPath, Metric: metric, clock: clockwork.NewRealClock()}
+func NewProm2ParquetWriter(
+	rootPath, metric string,
+	cleanLocalStorage bool,
+	remote remotes.Endpoint,
+) *Prom2ParquetWriter {
+	return &Prom2ParquetWriter{
+		RootPath:          rootPath,
+		Metric:            metric,
+		cleanLocalStorage: cleanLocalStorage,
+		clock:             clockwork.NewRealClock(),
+	}
 }
 
 func (self *Prom2ParquetWriter) Listen(stream <-chan prompb.TimeSeries) {
@@ -77,9 +91,15 @@ func (self *Prom2ParquetWriter) Listen(stream <-chan prompb.TimeSeries) {
 func (self *Prom2ParquetWriter) closeFile() {
 	if self.pw != nil {
 		if err := self.pw.WriteStop(); err != nil {
-			log.Errorf("Can't close parquet writer: %v", err)
+			log.Errorf("can't close parquet writer: %v", err)
 		}
 		self.pw = nil
+
+		if self.cleanLocalStorage {
+			if err := os.Remove(self.currentFile); err != nil {
+				log.Errorf("could not remove local file %s: %v", self.currentFile, err)
+			}
+		}
 	}
 }
 
@@ -88,15 +108,15 @@ func (self *Prom2ParquetWriter) flush() error {
 
 	now := self.clock.Now().UTC()
 	currentDir := fmt.Sprintf("%s/%s", self.RootPath, now.Format("2006/01/02/15"))
-	currentFile := fmt.Sprintf("%s/%s.parquet", currentDir, self.Metric)
+	self.currentFile = fmt.Sprintf("%s/%s.parquet", currentDir, self.Metric)
 
-	log.Infof("writing metrics for %s to %s", self.Metric, currentFile)
+	log.Infof("writing metrics for %s to %s", self.Metric, self.currentFile)
 
 	if err := os.MkdirAll(currentDir, 0750); err != nil {
 		return fmt.Errorf("can't create directory: %w", err)
 	}
 
-	fw, err := local.NewLocalFileWriter(currentFile)
+	fw, err := local.NewLocalFileWriter(self.currentFile)
 	if err != nil {
 		return fmt.Errorf("can't create filewriter: %w", err)
 	}
