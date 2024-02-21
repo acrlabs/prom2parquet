@@ -1,0 +1,56 @@
+name: code verification
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo and build scripts
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Install Golang
+        uses: actions/setup-go@v4
+        with:
+          go-version-file: go.mod
+      - name: Build
+        run: make build
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo and build scripts
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Install Golang
+        uses: actions/setup-go@v4
+        with:
+          go-version-file: go.mod
+      - name: Lint Go code
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: v1.55
+      - name: Test
+        run: make test cover
+      - name: Upload coverage
+        uses: actions/upload-artifact@v3
+        with:
+          name: go-coverage
+          path: .build/coverage/go-coverage.txt
+
+  check-coverage:
+    runs-on: ubuntu-latest
+    needs:
+      - test
+    steps:
+      - name: Check out repo and build scripts
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Download coverage
+        uses: actions/download-artifact@v3
+      - name: Check coverage
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
