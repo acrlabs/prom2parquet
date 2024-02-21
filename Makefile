@@ -13,7 +13,7 @@ lint:
 
 test:
 	mkdir -p $(COVERAGE_DIR)
-	go test -coverprofile=$(GO_COVER_FILE)
+	go test -coverprofile=$(GO_COVER_FILE) ./...
 
 cover:
 	go tool cover -func=$(GO_COVER_FILE)
