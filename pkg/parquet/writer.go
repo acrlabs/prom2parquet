@@ -1,8 +1,10 @@
 package parquet
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/jonboulle/clockwork"
@@ -16,11 +18,13 @@ import (
 )
 
 type Prom2ParquetWriter struct {
-	RootPath string
-	Metric   string
+	rootPath string
+	prefix   string
+	metric   string
 
 	currentFile       string
 	cleanLocalStorage bool
+	remote            remotes.Store
 	nextFlushTime     time.Time
 	pw                *writer.ParquetWriter
 	clock             clockwork.Clock
@@ -38,16 +42,31 @@ type DataPoint struct {
 }
 
 func NewProm2ParquetWriter(
-	rootPath, metric string,
+	ctx context.Context,
+	rootPath, prefix, metric string,
 	cleanLocalStorage bool,
 	remote remotes.Endpoint,
-) *Prom2ParquetWriter {
-	return &Prom2ParquetWriter{
-		RootPath:          rootPath,
-		Metric:            metric,
-		cleanLocalStorage: cleanLocalStorage,
-		clock:             clockwork.NewRealClock(),
+) (*Prom2ParquetWriter, error) {
+	var store remotes.Store
+	var err error
+
+	switch remote { //nolint:gocritic // eventually we'll support other backends
+	case remotes.S3:
+		store, err = remotes.NewAWSStore(ctx, "simkube", rootPath)
+		if err != nil {
+			return nil, fmt.Errorf("could not create AWS store: %w", err)
+		}
 	}
+
+	return &Prom2ParquetWriter{
+		rootPath: rootPath,
+		prefix:   prefix,
+		metric:   metric,
+
+		cleanLocalStorage: cleanLocalStorage,
+		remote:            store,
+		clock:             clockwork.NewRealClock(),
+	}, nil
 }
 
 func (self *Prom2ParquetWriter) Listen(stream <-chan prompb.TimeSeries) {
@@ -95,11 +114,19 @@ func (self *Prom2ParquetWriter) closeFile() {
 		}
 		self.pw = nil
 
-		if self.cleanLocalStorage {
-			if err := os.Remove(self.currentFile); err != nil {
-				log.Errorf("could not remove local file %s: %v", self.currentFile, err)
+		go func() {
+			if self.remote != nil {
+				if err := self.remote.Save(self.currentFile); err != nil {
+					log.Errorf("could not save %s to remote store: %v", self.currentFile, err)
+				}
 			}
-		}
+
+			if self.cleanLocalStorage {
+				if err := os.Remove(self.currentFile); err != nil {
+					log.Errorf("could not remove local copy of %s: %v", self.currentFile, err)
+				}
+			}
+		}()
 	}
 }
 
@@ -107,10 +134,15 @@ func (self *Prom2ParquetWriter) flush() error {
 	self.closeFile()
 
 	now := self.clock.Now().UTC()
-	currentDir := fmt.Sprintf("%s/%s", self.RootPath, now.Format("2006/01/02/15"))
-	self.currentFile = fmt.Sprintf("%s/%s.parquet", currentDir, self.Metric)
+	currentDir := fmt.Sprintf("%s/%s/%s", self.rootPath, self.prefix, self.metric)
+	dirtyCurrentFile := fmt.Sprintf("%s/%s.parquet", currentDir, now.Format("2006010215"))
+	currentFile, err := filepath.Abs(dirtyCurrentFile)
+	if err != nil {
+		return fmt.Errorf("couldn't compute absolute path for %s: %w", dirtyCurrentFile, err)
+	}
+	self.currentFile = currentFile
 
-	log.Infof("writing metrics for %s to %s", self.Metric, self.currentFile)
+	log.Infof("writing metrics for %s to %s", self.metric, self.currentFile)
 
 	if err := os.MkdirAll(currentDir, 0750); err != nil {
 		return fmt.Errorf("can't create directory: %w", err)

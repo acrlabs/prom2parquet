@@ -28,6 +28,9 @@ class Prom2Parquet(fire.AppPackage):
             image=image,
             args=[
                 "/prom2parquet",
+                "--prefix", "testing",
+                "--clean-local-storage",
+                "--remote", "aws",
             ],
         ).with_env(env).with_ports(SERVER_PORT).with_security_context(Capability.DEBUG)
 

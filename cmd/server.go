@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -24,6 +25,8 @@ type promserver struct {
 	httpserv *http.Server
 	opts     *options
 	channels map[string]chan prompb.TimeSeries
+
+	m sync.RWMutex
 }
 
 func newServer(opts *options) *promserver {
@@ -38,42 +41,6 @@ func newServer(opts *options) *promserver {
 	mux.HandleFunc("/receive", s.metricsReceive)
 
 	return s
-}
-
-func (self *promserver) handleShutdown() {
-	log.Info("shutting down...")
-	timer := time.AfterFunc(shutdownTime, func() {
-		os.Exit(0)
-	})
-	defer timer.Stop()
-
-	self.stopServer(false)
-
-	<-timer.C
-}
-
-func (self *promserver) stopServer(stayAlive bool) {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Warnf("recovered from panic, channels already closed")
-		}
-	}()
-
-	log.Infof("flushing all data files")
-	for _, ch := range self.channels {
-		close(ch)
-	}
-
-	ctxTimeout, cancel := context.WithTimeout(context.Background(), shutdownTime)
-	defer cancel()
-	if err := self.httpserv.Shutdown(ctxTimeout); err != nil {
-		log.Errorf("failed shutting server down: %v", err)
-	}
-
-	if stayAlive {
-		log.Infof("sleeping indefinitely")
-		select {}
-	}
 }
 
 func (self *promserver) run() {
@@ -107,6 +74,40 @@ func (self *promserver) run() {
 	<-endChannel
 }
 
+func (self *promserver) handleShutdown() {
+	log.Info("shutting down...")
+	defer func() {
+		if r := recover(); r != nil {
+			log.Warnf("recovered from panic, channels already closed")
+		}
+	}()
+
+	self.stopServer(false)
+	timer := time.AfterFunc(shutdownTime, func() {
+		os.Exit(0)
+	})
+
+	<-timer.C
+}
+
+func (self *promserver) stopServer(stayAlive bool) {
+	log.Infof("flushing all data files")
+	for _, ch := range self.channels {
+		close(ch)
+	}
+
+	ctxTimeout, cancel := context.WithTimeout(context.Background(), shutdownTime)
+	defer cancel()
+	if err := self.httpserv.Shutdown(ctxTimeout); err != nil {
+		log.Errorf("failed shutting server down: %v", err)
+	}
+
+	if stayAlive {
+		log.Infof("sleeping indefinitely")
+		select {}
+	}
+}
+
 func (self *promserver) metricsReceive(w http.ResponseWriter, req *http.Request) {
 	body, err := remote.DecodeWriteRequest(req.Body)
 	if err != nil {
@@ -115,24 +116,51 @@ func (self *promserver) metricsReceive(w http.ResponseWriter, req *http.Request)
 	}
 
 	for _, ts := range body.Timeseries {
-		name_label, _ := lo.Find(ts.Labels, func(i prompb.Label) bool { return i.Name == model.MetricNameLabel })
-		metric_name := name_label.Value
+		var ch chan prompb.TimeSeries
+		var ok bool
+		var err error
 
-		log.Infof("received timeseries data for %s", metric_name)
-		if _, ok := self.channels[metric_name]; !ok {
-			log.Infof("new metric name seen, creating writer %s", metric_name)
-			writer := parquet.NewProm2ParquetWriter(
-				fmt.Sprintf("/data/%s", self.opts.prefix),
-				metric_name,
-				self.opts.cleanLocalStorage,
-				self.opts.remote,
-			)
-			ch := make(chan prompb.TimeSeries)
-			self.channels[metric_name] = ch
+		nameLabel, _ := lo.Find(ts.Labels, func(i prompb.Label) bool { return i.Name == model.MetricNameLabel })
+		metricName := nameLabel.Value
 
-			go writer.Listen(ch)
+		log.Debugf("received timeseries data for %s", metricName)
+
+		self.m.RLock()
+		ch, ok = self.channels[metricName]
+		self.m.RUnlock()
+
+		if !ok {
+			ch, err = self.spawnWriter(req.Context(), metricName)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
 		}
 
-		self.channels[metric_name] <- ts
+		ch <- ts
 	}
+}
+
+func (self *promserver) spawnWriter(ctx context.Context, metricName string) (chan prompb.TimeSeries, error) {
+	self.m.Lock()
+	defer self.m.Unlock()
+
+	log.Infof("new metric name seen, creating writer %s", metricName)
+	writer, err := parquet.NewProm2ParquetWriter(
+		ctx,
+		"/data",
+		self.opts.prefix,
+		metricName,
+		self.opts.cleanLocalStorage,
+		self.opts.remote,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("could not create writer for %s: %w", metricName, err)
+	}
+	ch := make(chan prompb.TimeSeries)
+	self.channels[metricName] = ch
+
+	go writer.Listen(ch)
+
+	return ch, nil
 }

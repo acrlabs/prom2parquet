@@ -3,9 +3,7 @@ package remotes
 import (
 	"context"
 	"fmt"
-	"io/fs"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -19,8 +17,8 @@ type AWSRemoteStore struct {
 	s3Client   *s3.Client
 }
 
-func NewAWSStore(bucket, rootPrefix string) (*AWSRemoteStore, error) {
-	cfg, err := config.LoadDefaultConfig(context.Background())
+func NewAWSStore(ctx context.Context, bucket, rootPrefix string) (*AWSRemoteStore, error) {
+	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("could not read AWS config: %w", err)
 	}
@@ -32,29 +30,21 @@ func NewAWSStore(bucket, rootPrefix string) (*AWSRemoteStore, error) {
 	}, nil
 }
 
-func (self *AWSRemoteStore) Save(root, currentDir string) error {
-	currentPath := fmt.Sprintf("%s/%s", root, currentDir)
+func (self *AWSRemoteStore) Save(currentFile string) error {
+	file, err := os.Open(currentFile)
+	if err != nil {
+		return fmt.Errorf("could not open %s: %w", currentFile, err)
+	}
+	defer file.Close()
 
-	if err := filepath.WalkDir(currentPath, func(path string, entry fs.DirEntry, err error) error {
-		if !entry.IsDir() {
-			file, err := os.Open(path)
-			if err != nil {
-				log.Errorf("could not open file %s: %v", path, err)
-			}
-			defer file.Close()
-
-			key := strings.TrimPrefix(path, root)
-			if _, err := self.s3Client.PutObject(context.Background(), &s3.PutObjectInput{
-				Bucket: &self.bucket,
-				Key:    &key,
-				Body:   file,
-			}); err != nil {
-				log.Errorf("could not write file %s to S3: %v", path, err)
-			}
-		}
-		return nil
+	key := strings.TrimPrefix(currentFile, self.rootPrefix+"/")
+	log.Infof("saving a copy of %s to s3://%s/%s", currentFile, self.bucket, key)
+	if _, err := self.s3Client.PutObject(context.Background(), &s3.PutObjectInput{
+		Bucket: &self.bucket,
+		Key:    &key,
+		Body:   file,
 	}); err != nil {
-		return fmt.Errorf("error saving contents to S3: %w", err)
+		return fmt.Errorf("could not write %s to S3: %w", currentFile, err)
 	}
 
 	return nil

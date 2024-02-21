@@ -9,6 +9,6 @@ const (
 	S3
 )
 
-type RemoteStore interface {
-	Save(dir string) error
+type Store interface {
+	Save(currentFile string) error
 }
