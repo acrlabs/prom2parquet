@@ -8,14 +8,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-//nolint:gochecknoglobals
-var logLevels = []log.Level{
-	log.ErrorLevel,
-	log.WarnLevel,
-	log.InfoLevel,
-}
-
-func SetupLogging(level int) {
+func SetupLogging(level log.Level) {
 	prettyfier := func(f *runtime.Frame) (string, string) {
 		// Build with -trimpath to hide info about the devel environment
 		// Strip off the leading package name for "pretty" output
@@ -28,10 +21,6 @@ func SetupLogging(level int) {
 		CallerPrettyfier: prettyfier,
 	})
 
-	if level >= len(logLevels) {
-		log.SetLevel(log.DebugLevel)
-	} else {
-		log.SetLevel(logLevels[level])
-	}
+	log.SetLevel(level)
 	log.SetReportCaller(true)
 }
