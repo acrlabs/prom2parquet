@@ -14,6 +14,8 @@ import (
 	"github.com/acrlabs/prom2parquet/pkg/backends"
 )
 
+const pageNum = 4
+
 type Prom2ParquetWriter struct {
 	backend backends.StorageBackend
 	root    string
@@ -70,7 +72,7 @@ func (self *Prom2ParquetWriter) Listen(stream <-chan prompb.TimeSeries) {
 				return
 			}
 
-			dp := createDatapointForLabels(ts.Labels)
+			dp := createDataPointForLabels(ts.Labels)
 			for _, s := range ts.Samples {
 				dp.Value = s.Value
 				dp.Timestamp = s.Timestamp
@@ -111,9 +113,9 @@ func (self *Prom2ParquetWriter) flush() error {
 		return fmt.Errorf("can't create storage backend writer: %w", err)
 	}
 
-	pw, err := writer.NewParquetWriter(fw, new(DataPoint), 4)
+	pw, err := writer.NewParquetWriter(fw, new(DataPoint), pageNum)
 	if err != nil {
-		return fmt.Errorf("can't create parquet writerrr: %w", err)
+		return fmt.Errorf("can't create parquet writer: %w", err)
 	}
 	pw.CompressionType = parquet.CompressionCodec_SNAPPY
 

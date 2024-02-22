@@ -26,7 +26,9 @@ type promserver struct {
 	opts     *options
 	channels map[string]chan prompb.TimeSeries
 
-	m sync.RWMutex
+	m            sync.RWMutex
+	flushChannel chan os.Signal
+	killChannel  chan os.Signal
 }
 
 func newServer(opts *options) *promserver {
@@ -37,6 +39,9 @@ func newServer(opts *options) *promserver {
 		httpserv: &http.Server{Addr: fulladdr, Handler: mux, ReadHeaderTimeout: 10 * time.Second},
 		opts:     opts,
 		channels: map[string]chan prompb.TimeSeries{},
+
+		flushChannel: make(chan os.Signal, 1),
+		killChannel:  make(chan os.Signal, 1),
 	}
 	mux.HandleFunc("/receive", s.metricsReceive)
 
@@ -44,11 +49,8 @@ func newServer(opts *options) *promserver {
 }
 
 func (self *promserver) run() {
-	flushChannel := make(chan os.Signal, 1)
-	signal.Notify(flushChannel, syscall.SIGUSR1)
-
-	killChannel := make(chan os.Signal, 1)
-	signal.Notify(killChannel, syscall.SIGTERM)
+	signal.Notify(self.flushChannel, syscall.SIGUSR1)
+	signal.Notify(self.killChannel, syscall.SIGTERM)
 
 	endChannel := make(chan struct{}, 1)
 
@@ -59,15 +61,15 @@ func (self *promserver) run() {
 	}()
 
 	go func() {
-		<-killChannel
+		<-self.killChannel
 		self.handleShutdown()
 		close(endChannel)
 	}()
 
 	go func() {
-		<-flushChannel
-		log.Infof("SIGUSR1 received")
-		self.stopServer(true)
+		<-self.flushChannel
+		log.Infof("SIGUSR1 received; sleeping indefinitely")
+		self.stopServer()
 	}()
 
 	log.Infof("server listening on %s", self.httpserv.Addr)
@@ -82,7 +84,7 @@ func (self *promserver) handleShutdown() {
 		}
 	}()
 
-	self.stopServer(false)
+	self.stopServer()
 	timer := time.AfterFunc(shutdownTime, func() {
 		os.Exit(0)
 	})
@@ -90,7 +92,7 @@ func (self *promserver) handleShutdown() {
 	<-timer.C
 }
 
-func (self *promserver) stopServer(stayAlive bool) {
+func (self *promserver) stopServer() {
 	log.Infof("flushing all data files")
 	for _, ch := range self.channels {
 		close(ch)
@@ -101,11 +103,6 @@ func (self *promserver) stopServer(stayAlive bool) {
 	if err := self.httpserv.Shutdown(ctxTimeout); err != nil {
 		log.Errorf("failed shutting server down: %v", err)
 	}
-
-	if stayAlive {
-		log.Infof("sleeping indefinitely")
-		select {}
-	}
 }
 
 func (self *promserver) metricsReceive(w http.ResponseWriter, req *http.Request) {
@@ -115,10 +112,18 @@ func (self *promserver) metricsReceive(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
-	for _, ts := range body.Timeseries {
+	if err := self.sendTimeseries(req.Context(), body.Timeseries); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+}
+
+func (self *promserver) sendTimeseries(ctx context.Context, timeserieses []prompb.TimeSeries) (err error) {
+	for _, ts := range timeserieses {
+		// I'm not 100% sure which of these things would be recreated/shadowed below, so to be safe
+		// I'm just declaring everything upfront
 		var ch chan prompb.TimeSeries
 		var ok bool
-		var err error
 
 		nameLabel, _ := lo.Find(ts.Labels, func(i prompb.Label) bool { return i.Name == model.MetricNameLabel })
 		metricName := nameLabel.Value
@@ -130,15 +135,16 @@ func (self *promserver) metricsReceive(w http.ResponseWriter, req *http.Request)
 		self.m.RUnlock()
 
 		if !ok {
-			ch, err = self.spawnWriter(req.Context(), metricName)
+			ch, err = self.spawnWriter(ctx, metricName)
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
+				return fmt.Errorf("could not spawn timeseries writer for %s: %w", metricName, err)
 			}
 		}
 
 		ch <- ts
 	}
+
+	return nil
 }
 
 func (self *promserver) spawnWriter(ctx context.Context, metricName string) (chan prompb.TimeSeries, error) {
@@ -159,7 +165,7 @@ func (self *promserver) spawnWriter(ctx context.Context, metricName string) (cha
 	ch := make(chan prompb.TimeSeries)
 	self.channels[metricName] = ch
 
-	go writer.Listen(ch)
+	go writer.Listen(ch) //nolint:contextcheck // the req context and the backend creation context should be separate
 
 	return ch, nil
 }
