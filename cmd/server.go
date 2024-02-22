@@ -148,11 +148,10 @@ func (self *promserver) spawnWriter(ctx context.Context, metricName string) (cha
 	log.Infof("new metric name seen, creating writer %s", metricName)
 	writer, err := parquet.NewProm2ParquetWriter(
 		ctx,
-		"/data",
+		self.opts.backendRoot,
 		self.opts.prefix,
 		metricName,
-		self.opts.cleanLocalStorage,
-		self.opts.remote,
+		self.opts.backend,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("could not create writer for %s: %w", metricName, err)

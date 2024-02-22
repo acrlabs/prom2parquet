@@ -6,21 +6,21 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/acrlabs/prom2parquet/pkg/remotes"
+	"github.com/acrlabs/prom2parquet/pkg/backends"
 )
 
 const (
-	prefixFlag            = "prefix"
-	serverPortFlag        = "server-port"
-	cleanLocalStorageFlag = "clean-local-storage"
-	remoteFlag            = "remote"
-	verbosityFlag         = "verbosity"
+	prefixFlag      = "prefix"
+	serverPortFlag  = "server-port"
+	backendFlag     = "backend"
+	backendRootFlag = "backend-root"
+	verbosityFlag   = "verbosity"
 )
 
 //nolint:gochecknoglobals
-var supportedRemoteIDs = map[remotes.Endpoint][]string{
-	remotes.None: {"none"},
-	remotes.S3:   {"s3", "aws"},
+var supportedBackendIDs = map[backends.StorageBackend][]string{
+	backends.Local: {"none"},
+	backends.S3:    {"s3", "aws"},
 }
 
 //nolint:gochecknoglobals
@@ -38,8 +38,8 @@ type options struct {
 	prefix string
 	port   int
 
-	cleanLocalStorage bool
-	remote            remotes.Endpoint
+	backend     backends.StorageBackend
+	backendRoot string
 
 	verbosity log.Level
 }

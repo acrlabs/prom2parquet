@@ -3,31 +3,28 @@ package parquet
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/prometheus/prompb"
 	log "github.com/sirupsen/logrus"
-	"github.com/xitongsys/parquet-go-source/local"
 	"github.com/xitongsys/parquet-go/parquet"
 	"github.com/xitongsys/parquet-go/writer"
 
-	"github.com/acrlabs/prom2parquet/pkg/remotes"
+	"github.com/acrlabs/prom2parquet/pkg/backends"
 )
 
 type Prom2ParquetWriter struct {
-	rootPath string
-	prefix   string
-	metric   string
+	backend backends.StorageBackend
+	root    string
+	prefix  string
+	metric  string
 
-	currentFile       string
-	cleanLocalStorage bool
-	remote            remotes.Store
-	nextFlushTime     time.Time
-	pw                *writer.ParquetWriter
-	clock             clockwork.Clock
+	currentFile   string
+	nextFlushTime time.Time
+	pw            *writer.ParquetWriter
+
+	clock clockwork.Clock
 }
 
 type DataPoint struct {
@@ -43,29 +40,16 @@ type DataPoint struct {
 
 func NewProm2ParquetWriter(
 	ctx context.Context,
-	rootPath, prefix, metric string,
-	cleanLocalStorage bool,
-	remote remotes.Endpoint,
+	root, prefix, metric string,
+	backend backends.StorageBackend,
 ) (*Prom2ParquetWriter, error) {
-	var store remotes.Store
-	var err error
-
-	switch remote { //nolint:gocritic // eventually we'll support other backends
-	case remotes.S3:
-		store, err = remotes.NewAWSStore(ctx, "simkube", rootPath)
-		if err != nil {
-			return nil, fmt.Errorf("could not create AWS store: %w", err)
-		}
-	}
-
 	return &Prom2ParquetWriter{
-		rootPath: rootPath,
-		prefix:   prefix,
-		metric:   metric,
+		backend: backend,
+		root:    root,
+		prefix:  prefix,
+		metric:  metric,
 
-		cleanLocalStorage: cleanLocalStorage,
-		remote:            store,
-		clock:             clockwork.NewRealClock(),
+		clock: clockwork.NewRealClock(),
 	}, nil
 }
 
@@ -92,14 +76,14 @@ func (self *Prom2ParquetWriter) Listen(stream <-chan prompb.TimeSeries) {
 				dp.Timestamp = s.Timestamp
 
 				if err := self.pw.Write(dp); err != nil {
-					log.Errorf("Could not write datapoint: %v", err)
+					log.Errorf("could not write datapoint: %v", err)
 				}
 			}
 		case <-flushTicker.C:
 			if time.Now().After(self.nextFlushTime) {
 				log.Infof("Flush triggered: %v >= %v", time.Now(), self.nextFlushTime)
 				if err := self.flush(); err != nil {
-					log.Errorf("Could not flush data: %v", err)
+					log.Errorf("could not flush data: %v", err)
 					return
 				}
 			}
@@ -113,54 +97,29 @@ func (self *Prom2ParquetWriter) closeFile() {
 			log.Errorf("can't close parquet writer: %v", err)
 		}
 		self.pw = nil
-
-		go func() {
-			if self.remote != nil {
-				if err := self.remote.Save(self.currentFile); err != nil {
-					log.Errorf("could not save %s to remote store: %v", self.currentFile, err)
-				}
-			}
-
-			if self.cleanLocalStorage {
-				if err := os.Remove(self.currentFile); err != nil {
-					log.Errorf("could not remove local copy of %s: %v", self.currentFile, err)
-				}
-			}
-		}()
 	}
 }
 
 func (self *Prom2ParquetWriter) flush() error {
+	now := self.clock.Now().UTC()
+
 	self.closeFile()
 
-	now := self.clock.Now().UTC()
-	currentDir := fmt.Sprintf("%s/%s/%s", self.rootPath, self.prefix, self.metric)
-	dirtyCurrentFile := fmt.Sprintf("%s/%s.parquet", currentDir, now.Format("2006010215"))
-	currentFile, err := filepath.Abs(dirtyCurrentFile)
+	self.currentFile = fmt.Sprintf("%s/%s/%s.parquet", self.prefix, self.metric, now.Format("2006010215"))
+	fw, err := backends.ConstructBackendForFile(self.root, self.currentFile, self.backend)
 	if err != nil {
-		return fmt.Errorf("couldn't compute absolute path for %s: %w", dirtyCurrentFile, err)
-	}
-	self.currentFile = currentFile
-
-	log.Infof("writing metrics for %s to %s", self.metric, self.currentFile)
-
-	if err := os.MkdirAll(currentDir, 0750); err != nil {
-		return fmt.Errorf("can't create directory: %w", err)
-	}
-
-	fw, err := local.NewLocalFileWriter(self.currentFile)
-	if err != nil {
-		return fmt.Errorf("can't create filewriter: %w", err)
+		return fmt.Errorf("can't create storage backend writer: %w", err)
 	}
 
 	pw, err := writer.NewParquetWriter(fw, new(DataPoint), 4)
 	if err != nil {
-		return fmt.Errorf("can't create parquet writer: %w", err)
+		return fmt.Errorf("can't create parquet writerrr: %w", err)
 	}
 	pw.CompressionType = parquet.CompressionCodec_SNAPPY
 
 	self.pw = pw
 	self.advanceFlushTime(&now)
+
 	return nil
 }
 

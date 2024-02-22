@@ -51,6 +51,10 @@ linters-settings:
     disabled-checks:
       - appendAssign
 
+  gosec:
+    excludes:
+      - G601 # memory aliasing -- not a problem in 1.22+
+
   importas:
     no-unaliased: true
     alias:

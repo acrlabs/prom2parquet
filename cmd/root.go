@@ -40,19 +40,20 @@ func rootCmd() *cobra.Command {
 		"port for the remote write endpoint to listen on",
 	)
 
-	root.PersistentFlags().BoolVar(
-		&opts.cleanLocalStorage,
-		cleanLocalStorageFlag,
-		false,
-		"delete pod-local parquet files upon flush",
-	)
 	root.PersistentFlags().Var(
-		enumflag.New(&opts.remote, remoteFlag, supportedRemoteIDs, enumflag.EnumCaseInsensitive),
-		remoteFlag,
+		enumflag.New(&opts.backend, backendFlag, supportedBackendIDs, enumflag.EnumCaseInsensitive),
+		backendFlag,
 		fmt.Sprintf(
-			"supported remote endpoints for saving parquet files\n(valid options: %s)",
-			validArgs(supportedRemoteIDs),
+			"supported remote backends for saving parquet files\n(valid options: %s)",
+			validArgs(supportedBackendIDs),
 		),
+	)
+
+	root.PersistentFlags().StringVar(
+		&opts.backendRoot,
+		backendRootFlag,
+		"/data",
+		"root path/location for the specified backend (e.g. bucket name for AWS S3)",
 	)
 
 	root.PersistentFlags().VarP(
@@ -66,6 +67,7 @@ func rootCmd() *cobra.Command {
 
 func start(opts *options) {
 	util.SetupLogging(opts.verbosity)
+	log.Infof("running with options: %v", opts)
 
 	server := newServer(opts)
 	server.run()
