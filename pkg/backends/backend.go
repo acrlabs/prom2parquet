@@ -49,8 +49,12 @@ func ConstructBackendForFile( //nolint:ireturn // this is fine
 
 	case Memory:
 		log.Warnf("using in-memory backend, this is intended for testing only!")
+		fullPath, err := filepath.Abs(fmt.Sprintf("%s/%s", root, file))
+		if err != nil {
+			return nil, fmt.Errorf("can't construct local path %s/%s: %w", root, file, err)
+		}
 
-		fw, err := mem.NewMemFileWriter(file, nil)
+		fw, err := mem.NewMemFileWriter(fullPath, nil)
 		if err != nil {
 			return nil, fmt.Errorf("can't create in-memory writer: %w", err)
 		}

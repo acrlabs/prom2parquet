@@ -19,7 +19,7 @@ const (
 
 //nolint:gochecknoglobals
 var supportedBackendIDs = map[backends.StorageBackend][]string{
-	backends.Local: {"none"},
+	backends.Local: {"local"},
 	backends.S3:    {"s3", "aws"},
 }
 

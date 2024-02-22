@@ -1,8 +1,11 @@
+![build status](https://github.com/acrlabs/prom2parquet/actions/workflows/verify.yml/badge.svg)
+
 # prom2parquet
 
 Remote write target for Prometheus that saves metrics to parquet files
 
-**This should be considered an alpha project**
+**⚠️ This should be considered an alpha project. ⚠️**
+In particular, the schema for the saved Parquet files is likely to change in the future.
 
 ## Overview
 
@@ -25,11 +28,12 @@ Usage:
   prom2parquet [flags]
 
 Flags:
-      --clean-local-storage   delete pod-local parquet files upon flush
+      --backend backend       supported remote backends for saving parquet files
+                              (valid options: none, s3/aws) (default local)
+      --backend-root string   root path/location for the specified backend (e.g. bucket name for AWS S3)
+                              (default "/data")
   -h, --help                  help for prom2parquet
       --prefix string         directory prefix for saving parquet files
-      --remote remote         supported remote endpoints for saving parquet files
-                              (valid options: none, s3/aws) (default none)
   -p, --server-port int       port for the remote write endpoint to listen on (default 1234)
   -v, --verbosity verbosity   log level (valid options: debug, error, fatal, info, panic, trace, warning/warn)
                               (default info)
@@ -37,18 +41,18 @@ Flags:
 
 Here is a brief overview of the options:
 
-### clean-local-storage
+### backend
 
-To reduce pod-local storage, you can configure prom2parquet to remove all parquet files after they've been written
-(currently once per hour).  This is generally not very useful unless you've also configured a remote storage option.
+Where to store the Parquet files;; currently supports pod-local storage and AWS S3.
+
+### backend-root
+
+"Root" location for the backend storage.  For pod-local storage this is the base directory, for AWS S3 this is the
+bucket name.
 
 ### prefix
 
 This option provides a prefix that can be used to differentiate between metrics collections.
-
-### remote
-
-Whether to save the parquet files to some remote storage; currently the only supported remote storage option is AWS S3.
 
 ### server-port
 
@@ -88,6 +92,17 @@ the executable, create and push the Docker images, and deploy to the configured 
 
 All build artifacts are placed in the `.build/` subdirectory.  You can remove this directory or run `make clean` to
 clean up.
+
+### Testing
+
+Run `make test` to run all the unit/integration tests.  If you want to test using pod-local storage, and you want to
+flush the Parquet files to disk without terminating the pod (e.g., so you can copy them elsewhere), you can send the
+process a SIGUSR1:
+
+```
+> kubectl exec prom2parquet-pod -- kill -s SIGUSR1 <pid>
+> kubectl cp prom2parquet-pod:/path/to/files ./
+```
 
 ### Code of Conduct
 

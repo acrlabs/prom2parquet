@@ -2,6 +2,7 @@ package parquet
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/prometheus/common/model"
@@ -15,7 +16,7 @@ const (
 	nodeKey      = "node"
 )
 
-func createDatapointForLabels(labels []prompb.Label) DataPoint {
+func createDataPointForLabels(labels []prompb.Label) DataPoint {
 	dp := DataPoint{}
 
 	label_strs := []string{}
@@ -30,11 +31,12 @@ func createDatapointForLabels(labels []prompb.Label) DataPoint {
 		case containerKey:
 			dp.Container = l.Value
 		case nodeKey:
-			dp.Container = l.Value
+			dp.Node = l.Value
 		default:
 			label_strs = append(label_strs, fmt.Sprintf("%s=%s", l.Name, l.Value))
 		}
 	}
+	sort.Strings(label_strs)
 	dp.Labels = strings.Join(label_strs, ",")
 
 	return dp
