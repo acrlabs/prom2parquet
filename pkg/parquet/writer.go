@@ -20,7 +20,6 @@ type Prom2ParquetWriter struct {
 	backend backends.StorageBackend
 	root    string
 	prefix  string
-	metric  string
 
 	currentFile   string
 	nextFlushTime time.Time
@@ -42,14 +41,13 @@ type DataPoint struct {
 
 func NewProm2ParquetWriter(
 	ctx context.Context,
-	root, prefix, metric string,
+	root, prefix string,
 	backend backends.StorageBackend,
 ) (*Prom2ParquetWriter, error) {
 	return &Prom2ParquetWriter{
 		backend: backend,
 		root:    root,
 		prefix:  prefix,
-		metric:  metric,
 
 		clock: clockwork.NewRealClock(),
 	}, nil
@@ -107,7 +105,7 @@ func (self *Prom2ParquetWriter) flush() error {
 
 	self.closeFile()
 
-	self.currentFile = fmt.Sprintf("%s/%s/%s.parquet", self.prefix, self.metric, now.Format("2006010215"))
+	self.currentFile = fmt.Sprintf("%s/%s.parquet", self.prefix, now.Format("2006010215"))
 	fw, err := backends.ConstructBackendForFile(self.root, self.currentFile, self.backend)
 	if err != nil {
 		return fmt.Errorf("can't create storage backend writer: %w", err)

@@ -19,7 +19,7 @@ func TestFlush(t *testing.T) {
 	w := Prom2ParquetWriter{
 		backend: backends.Memory,
 		root:    "/test",
-		metric:  "kube_node_stuff",
+		prefix:  "prefix/kube_node_stuff",
 
 		clock: clockwork.NewFakeClockAt(time.Time{}),
 	}
@@ -27,7 +27,7 @@ func TestFlush(t *testing.T) {
 	err := w.flush()
 	assert.Nil(t, err)
 
-	exists, err := afero.Exists(fs, "/test/kube_node_stuff/0001010100.parquet")
+	exists, err := afero.Exists(fs, "/test/prefix/kube_node_stuff/0001010100.parquet")
 	if err != nil {
 		panic(err)
 	}

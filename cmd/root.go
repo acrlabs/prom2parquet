@@ -26,12 +26,6 @@ func rootCmd() *cobra.Command {
 		},
 	}
 
-	root.PersistentFlags().StringVar(
-		&opts.prefix,
-		prefixFlag,
-		"",
-		"directory prefix for saving parquet files",
-	)
 	root.PersistentFlags().IntVarP(
 		&opts.port,
 		serverPortFlag,

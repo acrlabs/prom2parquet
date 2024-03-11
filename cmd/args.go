@@ -35,8 +35,7 @@ var logLevelIDs = map[log.Level][]string{
 }
 
 type options struct {
-	prefix string
-	port   int
+	port int
 
 	backend     backends.StorageBackend
 	backendRoot string

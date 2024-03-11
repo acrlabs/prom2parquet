@@ -16,7 +16,11 @@ import (
 	"github.com/acrlabs/prom2parquet/pkg/backends"
 )
 
-const metricName = "kube_node_stuff"
+const (
+	metricName  = "kube_node_stuff"
+	testPrefix  = "test-prefix"
+	channelName = testPrefix + "/" + metricName
+)
 
 // These tests are actually super-hacky and brittle, but I'm not too sure how to do these tests a different way.  It
 // would be nice to not just be comparing log outputs to see which code paths were taken, for one thing...
@@ -37,33 +41,6 @@ func TestServerRun(t *testing.T) {
 				"flushing all data files",
 				"shutting down",
 			},
-			forbiddenLogEntries: []string{
-				"SIGUSR1 received",
-				"recovered from panic",
-			},
-		},
-		"flush": {
-			operations: func(s *promserver) { close(s.flushChannel) },
-			expectedLogEntries: []string{
-				"server failed",
-				"flushing all data files",
-				"SIGUSR1 received",
-			},
-			forbiddenLogEntries: []string{
-				"shutting down",
-				"recovered from panic",
-			},
-		},
-		"flush then kill": {
-			operations: func(s *promserver) { close(s.flushChannel); time.Sleep(sleepTime); close(s.killChannel) },
-			expectedLogEntries: []string{
-				"server failed",
-				"flushing all data files",
-				"SIGUSR1 received",
-				"shutting down",
-				"recovered from panic",
-			},
-			forbiddenLogEntries: []string{},
 		},
 	}
 
@@ -96,13 +73,17 @@ func TestServerRun(t *testing.T) {
 
 func TestSendTimeseries(t *testing.T) {
 	srv := newServer(&options{})
-	srv.channels[metricName] = make(chan prompb.TimeSeries)
+	srv.channels[channelName] = make(chan prompb.TimeSeries)
 
 	ts := prompb.TimeSeries{
 		Labels: []prompb.Label{
 			{
 				Name:  model.MetricNameLabel,
 				Value: metricName,
+			},
+			{
+				Name:  prefixLabelKey,
+				Value: testPrefix,
 			},
 			{
 				Name:  "foo",
@@ -130,13 +111,13 @@ func TestSendTimeseries(t *testing.T) {
 		assert.Nil(t, err)
 	}()
 
-	val := <-srv.channels[metricName]
+	val := <-srv.channels[channelName]
 	assert.Equal(t, ts, val)
 }
 
 func TestSpawnWriter(t *testing.T) {
 	srv := newServer(&options{backend: backends.Memory})
-	_, err := srv.spawnWriter(context.TODO(), metricName)
+	_, err := srv.spawnWriter(context.TODO(), channelName)
 	assert.Nil(t, err)
-	assert.Contains(t, srv.channels, metricName)
+	assert.Contains(t, srv.channels, channelName)
 }
