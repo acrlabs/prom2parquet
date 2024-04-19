@@ -5,8 +5,6 @@ go 1.22.0
 replace github.com/xitongsys/parquet-go => github.com/drmorr0/parquet-go v1.7.0
 
 require (
-	github.com/aws/aws-sdk-go-v2/config v1.25.3
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.43.0
 	github.com/jonboulle/clockwork v0.4.0
 	github.com/prometheus/common v0.47.0
 	github.com/prometheus/prometheus v0.49.1
@@ -32,6 +30,7 @@ require (
 	github.com/aws/aws-sdk-go v1.48.14 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.25.0 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.5.1 // indirect
+	github.com/aws/aws-sdk-go-v2/config v1.25.3 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.16.2 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.14.4 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.14.0 // indirect
@@ -43,6 +42,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.2.3 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.10.3 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.16.3 // indirect
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.43.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.17.2 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.20.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.25.3 // indirect
@@ -97,12 +97,12 @@ require (
 	go.opentelemetry.io/otel/trace v1.21.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/crypto v0.18.0 // indirect
+	golang.org/x/crypto v0.21.0 // indirect
 	golang.org/x/exp v0.0.0-20231206192017-f3f8817b8deb // indirect
 	golang.org/x/mod v0.14.0 // indirect
-	golang.org/x/net v0.20.0 // indirect
+	golang.org/x/net v0.23.0 // indirect
 	golang.org/x/oauth2 v0.16.0 // indirect
-	golang.org/x/sys v0.16.0 // indirect
+	golang.org/x/sys v0.18.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	golang.org/x/tools v0.16.0 // indirect
