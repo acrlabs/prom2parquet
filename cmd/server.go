@@ -149,6 +149,7 @@ func (self *promserver) spawnWriter(ctx context.Context, channelName string) (ch
 		self.opts.backendRoot,
 		channelName,
 		self.opts.backend,
+		self.opts.flushInterval,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("could not create writer for %s: %w", channelName, err)

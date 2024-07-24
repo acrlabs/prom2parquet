@@ -5,8 +5,8 @@ GO_COVER_FILE=$(COVERAGE_DIR)/go-coverage.txt
 include build/base.mk
 include build/k8s.mk
 
-$(ARTIFACTS)::
-	CGO_ENABLED=0 go build -trimpath -o $(BUILD_DIR)/$@ ./cmd/.
+main:
+	CGO_ENABLED=0 go build -ldflags "-s -w" -trimpath -o $(BUILD_DIR)/prom2parquet ./cmd/.
 
 lint:
 	golangci-lint run

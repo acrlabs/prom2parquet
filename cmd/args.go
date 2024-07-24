@@ -3,6 +3,7 @@ package main
 import (
 	"sort"
 	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -10,11 +11,12 @@ import (
 )
 
 const (
-	prefixFlag      = "prefix"
-	serverPortFlag  = "server-port"
-	backendFlag     = "backend"
-	backendRootFlag = "backend-root"
-	verbosityFlag   = "verbosity"
+	prefixFlag        = "prefix"
+	serverPortFlag    = "server-port"
+	flushIntervalFlag = "flush-interval"
+	backendFlag       = "backend"
+	backendRootFlag   = "backend-root"
+	verbosityFlag     = "verbosity"
 )
 
 //nolint:gochecknoglobals
@@ -35,10 +37,10 @@ var logLevelIDs = map[log.Level][]string{
 }
 
 type options struct {
-	port int
-
-	backend     backends.StorageBackend
-	backendRoot string
+	port          int
+	flushInterval time.Duration
+	backend       backends.StorageBackend
+	backendRoot   string
 
 	verbosity log.Level
 }
