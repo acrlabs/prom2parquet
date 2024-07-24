@@ -1,3 +1,4 @@
+---
 run:
   timeout: 5m
 
@@ -53,7 +54,7 @@ linters-settings:
 
   gosec:
     excludes:
-      - G601 # memory aliasing -- not a problem in 1.22+
+      - G601  # memory aliasing -- not a problem in 1.22+
 
   importas:
     no-unaliased: true
