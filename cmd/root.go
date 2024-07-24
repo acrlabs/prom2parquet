@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -25,6 +26,13 @@ func rootCmd() *cobra.Command {
 			start(&opts)
 		},
 	}
+
+	root.PersistentFlags().DurationVar(
+		&opts.flushInterval,
+		flushIntervalFlag,
+		10*time.Minute,
+		"data flush interval",
+	)
 
 	root.PersistentFlags().IntVarP(
 		&opts.port,

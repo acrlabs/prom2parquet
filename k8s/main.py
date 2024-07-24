@@ -27,6 +27,8 @@ class Prom2parquet(fire.AppPackage):
             image=image,
             args=[
                 "/prom2parquet",
+                "--backend", "s3",
+                "--backend-root", "simkube",
             ],
         ).with_env(env).with_ports(SERVER_PORT).with_security_context(Capability.DEBUG)
 

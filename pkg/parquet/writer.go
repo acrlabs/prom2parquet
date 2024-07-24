@@ -17,13 +17,13 @@ import (
 const pageNum = 4
 
 type Prom2ParquetWriter struct {
-	backend backends.StorageBackend
-	root    string
-	prefix  string
+	backend       backends.StorageBackend
+	root          string
+	prefix        string
+	flushInterval time.Duration
 
-	currentFile   string
-	nextFlushTime time.Time
-	pw            *writer.ParquetWriter
+	currentFile string
+	pw          *writer.ParquetWriter
 
 	clock clockwork.Clock
 }
@@ -43,30 +43,50 @@ func NewProm2ParquetWriter(
 	ctx context.Context,
 	root, prefix string,
 	backend backends.StorageBackend,
+	flushInterval time.Duration,
 ) (*Prom2ParquetWriter, error) {
 	return &Prom2ParquetWriter{
-		backend: backend,
-		root:    root,
-		prefix:  prefix,
+		backend:       backend,
+		root:          root,
+		prefix:        prefix,
+		flushInterval: flushInterval,
 
 		clock: clockwork.NewRealClock(),
 	}, nil
 }
 
 func (self *Prom2ParquetWriter) Listen(stream <-chan prompb.TimeSeries) {
-	if err := self.flush(); err != nil {
-		log.Errorf("could not flush writer: %v", err)
+	self.listen(stream, self.getFlushTimer(), nil)
+}
+
+func (self *Prom2ParquetWriter) listen(
+	stream <-chan prompb.TimeSeries,
+	flushTimer <-chan time.Time,
+	running chan<- bool, // used for testing
+) {
+	if err := self.createBackendWriter(); err != nil {
+		log.Errorf("could not create backend writer: %v", err)
 		return
 	}
-	defer self.closeFile()
 
-	flushTicker := time.NewTicker(time.Minute)
+	// self.pw is a pointer to the writer instance, but it can get switched
+	// out from under us whenever we flush; go defer evaluates the function
+	// args when the defer call happens, not when the deferred function actually
+	// executes, so here we need to use a double pointer so that we can make
+	// sure we're closing the actual correct writer instance
+	defer func(pw **writer.ParquetWriter) {
+		closeFile(*pw)
+		close(running)
+	}(&self.pw)
+
+	if running != nil {
+		running <- true
+	}
 
 	for {
 		select {
 		case ts, ok := <-stream:
 			if !ok {
-				self.closeFile()
 				return
 			}
 
@@ -79,36 +99,29 @@ func (self *Prom2ParquetWriter) Listen(stream <-chan prompb.TimeSeries) {
 					log.Errorf("could not write datapoint: %v", err)
 				}
 			}
-		case <-flushTicker.C:
-			if time.Now().After(self.nextFlushTime) {
-				log.Infof("Flush triggered: %v >= %v", time.Now(), self.nextFlushTime)
-				if err := self.flush(); err != nil {
-					log.Errorf("could not flush data: %v", err)
-					return
-				}
+		case <-flushTimer:
+			flushTimer = self.getFlushTimer()
+			log.Infof("flush triggered for %v", self.currentFile)
+
+			// Run this in a separate goroutine so that writing the data
+			// to S3 (with throttling or whatever) doesn't block the new incoming
+			// datapoints
+			go closeFile(self.pw)
+			if err := self.createBackendWriter(); err != nil {
+				log.Errorf("could not create backend writer: %v", err)
+				return
 			}
 		}
 	}
 }
 
-func (self *Prom2ParquetWriter) closeFile() {
-	if self.pw != nil {
-		if err := self.pw.WriteStop(); err != nil {
-			log.Errorf("can't close parquet writer: %v", err)
-		}
-		self.pw = nil
-	}
-}
+func (self *Prom2ParquetWriter) createBackendWriter() error {
+	basename := self.now().Truncate(self.flushInterval).Format("20060102150405")
+	self.currentFile = fmt.Sprintf("%s/%s.parquet", self.prefix, basename)
 
-func (self *Prom2ParquetWriter) flush() error {
-	now := self.clock.Now().UTC()
-
-	self.closeFile()
-
-	self.currentFile = fmt.Sprintf("%s/%s.parquet", self.prefix, now.Format("2006010215"))
 	fw, err := backends.ConstructBackendForFile(self.root, self.currentFile, self.backend)
 	if err != nil {
-		return fmt.Errorf("can't create storage backend writer: %w", err)
+		return fmt.Errorf("can't create storage backend: %w", err)
 	}
 
 	pw, err := writer.NewParquetWriter(fw, new(DataPoint), pageNum)
@@ -118,21 +131,24 @@ func (self *Prom2ParquetWriter) flush() error {
 	pw.CompressionType = parquet.CompressionCodec_SNAPPY
 
 	self.pw = pw
-	self.advanceFlushTime(&now)
 
 	return nil
 }
 
-func (self *Prom2ParquetWriter) advanceFlushTime(now *time.Time) {
-	nextHour := now.Add(time.Hour)
-	self.nextFlushTime = time.Date(
-		nextHour.Year(),
-		nextHour.Month(),
-		nextHour.Day(),
-		nextHour.Hour(),
-		0,
-		0,
-		0,
-		nextHour.Location(),
-	)
+func (self *Prom2ParquetWriter) getFlushTimer() <-chan time.Time {
+	now := self.now()
+	nextFlushTime := now.Truncate(self.flushInterval).Add(self.flushInterval)
+	return time.After(nextFlushTime.Sub(now))
+}
+
+func (self *Prom2ParquetWriter) now() time.Time {
+	return self.clock.Now().UTC()
+}
+
+func closeFile(pw *writer.ParquetWriter) {
+	if pw != nil {
+		if err := pw.WriteStop(); err != nil {
+			log.Errorf("can't close parquet writer: %v", err)
+		}
+	}
 }
