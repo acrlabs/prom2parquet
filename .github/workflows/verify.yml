@@ -1,5 +1,6 @@
+---
 name: code verification
-on: [push]
+on: [push]  # yamllint disable-line rule:truthy
 
 jobs:
   build:
@@ -27,10 +28,8 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version-file: go.mod
-      - name: Lint Go code
-        uses: golangci/golangci-lint-action@v3
-        with:
-          version: v1.55
+      - name: Run pre-commit
+        uses: pre-commit/action@v3.0.1
       - name: Test
         run: make test cover
       - name: Upload coverage

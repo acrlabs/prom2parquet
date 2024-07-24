@@ -1,0 +1,9 @@
+---
+extends: default
+
+rules:
+  line-length:
+    max: 120
+  quoted-strings:
+    required: false
+    extra-required: [^http://, ^https://]
