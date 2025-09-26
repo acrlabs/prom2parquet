@@ -5,7 +5,7 @@ GO_COVER_FILE=$(COVERAGE_DIR)/go-coverage.txt
 include build/base.mk
 include build/k8s.mk
 
-main:
+build:
 	CGO_ENABLED=0 go build -ldflags "-s -w" -trimpath -o $(BUILD_DIR)/prom2parquet ./cmd/.
 
 lint:
