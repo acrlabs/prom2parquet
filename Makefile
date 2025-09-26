@@ -3,6 +3,7 @@ COVERAGE_DIR=$(BUILD_DIR)/coverage
 GO_COVER_FILE=$(COVERAGE_DIR)/go-coverage.txt
 
 include build/base.mk
+include build/image.mk
 include build/k8s.mk
 
 build:
@@ -17,3 +18,6 @@ test:
 
 cover:
 	go tool cover -func=$(GO_COVER_FILE)
+
+publish:
+	DOCKER_REGISTRY=quay.io/appliedcomputing make image
